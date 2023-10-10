@@ -1,11 +1,8 @@
-[package]
-name = "wasm_bindgen"
-version = "0.1.0"
-edition = "2021"
+[workspace]
 
-[lib]
-crate-type = ["cdylib"]
+members = [
+    "run-wasm",
+    "wgpu-minimal"
+]
 
-
-[dependencies]
-wasm-bindgen = "0.2.87"
+resolver = "2"

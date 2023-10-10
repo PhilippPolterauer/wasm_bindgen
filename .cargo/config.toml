@@ -1,2 +1,2 @@
-[build]
-target = "wasm32-unknown-unknown"
+[alias]
+run-wasm = "run --release --package run-wasm --"
