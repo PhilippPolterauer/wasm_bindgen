@@ -14,4 +14,4 @@ RUSTFLAGS=--cfg=web_sys_unstable_apis cargo run-wasm --release --package wgpu-mi
 ```
 
 ## expected output
-![Alt text](cube.png)
+![Rendered Cube](cube.png)
