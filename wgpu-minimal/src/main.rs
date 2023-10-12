@@ -5,8 +5,7 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::{
     borrow::Cow,
-    f32::consts::{self, FRAC_1_PI, FRAC_2_PI, PI},
-    f64::consts::PI,
+    f32::consts::{self, PI},
     future::Future,
     mem,
     pin::Pin,
@@ -33,12 +32,12 @@ impl RandomAxis {
         }
     }
     fn random_axis(&mut self) -> glam::Vec3 {
-        let phi: f32 = self.rng.gen_range(0..FRAC_2_PI);
-        let theta: f32 = self.rng.gen_range(0..FRAC_1_PI);
+        let phi  = self.rng.gen_range(0.0..PI*2.0);
+        let theta = self.rng.gen_range(0.0..PI);
         let x = theta.sin() * phi.cos();
         let y = theta.sin() * phi.sin();
         let z = theta.cos();
-        glam::Vec3::new(x, y, z).normalize()
+        glam::Vec3::new(x as f32, y as f32, z as f32).normalize()
     }
 }
 
@@ -144,6 +143,7 @@ struct Example {
     pipeline: wgpu::RenderPipeline,
     pipeline_wire: Option<wgpu::RenderPipeline>,
     mx_total: glam::Mat4,
+    random_axis: RandomAxis,
 }
 
 impl Example {
@@ -369,6 +369,7 @@ impl framework::Example for Example {
             pipeline,
             pipeline_wire,
             mx_total,
+            random_axis: RandomAxis::new(),
         }
     }
 
@@ -430,7 +431,7 @@ impl framework::Example for Example {
             }
         }
 
-        let rot = glam::Mat4::from_axis_angle(random_axis(), PI / 100.0);
+        let rot = glam::Mat4::from_axis_angle(self.random_axis.random_axis(), PI / 1000.0);
         self.mx_total = self.mx_total * rot;
 
         let mx_ref: &[f32; 16] = self.mx_total.as_ref();
