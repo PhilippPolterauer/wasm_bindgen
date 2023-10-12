@@ -1,5 +1,17 @@
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, f32::consts, future::Future, mem, pin::Pin, task};
+use js_sys::Math::random;
+use log::info;
+use rand::rngs::ThreadRng;
+use rand::Rng;
+use std::{
+    borrow::Cow,
+    f32::consts::{self, FRAC_1_PI, FRAC_2_PI, PI},
+    f64::consts::PI,
+    future::Future,
+    mem,
+    pin::Pin,
+    task,
+};
 use wgpu::util::DeviceExt;
 mod framework;
 
@@ -8,6 +20,26 @@ mod framework;
 struct Vertex {
     _pos: [f32; 4],
     _tex_coord: [f32; 2],
+}
+
+struct RandomAxis {
+    rng: ThreadRng,
+}
+
+impl RandomAxis {
+    fn new() -> Self {
+        RandomAxis {
+            rng: rand::thread_rng(),
+        }
+    }
+    fn random_axis(&mut self) -> glam::Vec3 {
+        let phi: f32 = self.rng.gen_range(0..FRAC_2_PI);
+        let theta: f32 = self.rng.gen_range(0..FRAC_1_PI);
+        let x = theta.sin() * phi.cos();
+        let y = theta.sin() * phi.sin();
+        let z = theta.cos();
+        glam::Vec3::new(x, y, z).normalize()
+    }
 }
 
 fn vertex(pos: [i8; 3], tc: [i8; 2]) -> Vertex {
@@ -108,9 +140,10 @@ struct Example {
     index_buf: wgpu::Buffer,
     index_count: usize,
     bind_group: wgpu::BindGroup,
-    uniform_buf: wgpu::Buffer,
+    transform_uniform_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
     pipeline_wire: Option<wgpu::RenderPipeline>,
+    mx_total: glam::Mat4,
 }
 
 impl Example {
@@ -217,7 +250,7 @@ impl framework::Example for Example {
         // Create other resources
         let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-        let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let transform_uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform Buffer"),
             contents: bytemuck::cast_slice(mx_ref),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -229,7 +262,7 @@ impl framework::Example for Example {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: uniform_buf.as_entire_binding(),
+                    resource: transform_uniform_buf.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -332,14 +365,15 @@ impl framework::Example for Example {
             index_buf,
             index_count: index_data.len(),
             bind_group,
-            uniform_buf,
+            transform_uniform_buf,
             pipeline,
             pipeline_wire,
+            mx_total,
         }
     }
 
     fn update(&mut self, _event: winit::event::WindowEvent) {
-        //empty
+        info!("update");
     }
 
     fn resize(
@@ -348,9 +382,10 @@ impl framework::Example for Example {
         _device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) {
+        info!("resize");
         let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-        queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(mx_ref));
+        queue.write_buffer(&self.transform_uniform_buf, 0, bytemuck::cast_slice(mx_ref));
     }
 
     fn render(
@@ -395,6 +430,12 @@ impl framework::Example for Example {
             }
         }
 
+        let rot = glam::Mat4::from_axis_angle(random_axis(), PI / 100.0);
+        self.mx_total = self.mx_total * rot;
+
+        let mx_ref: &[f32; 16] = self.mx_total.as_ref();
+        queue.write_buffer(&self.transform_uniform_buf, 0, bytemuck::cast_slice(mx_ref));
+
         queue.submit(Some(encoder.finish()));
 
         // If an error occurs, report it and panic.
@@ -406,43 +447,4 @@ impl framework::Example for Example {
 
 fn main() {
     framework::run::<Example>("cube");
-}
-
-wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn cube() {
-    framework::test::<Example>(framework::FrameworkRefTest {
-        // Generated on 1080ti on Vk/Windows
-        image_path: "/examples/cube/screenshot.png",
-        width: 1024,
-        height: 768,
-        optional_features: wgpu::Features::default(),
-        base_test_parameters: wgpu_test::TestParameters::default(),
-        comparisons: &[
-            wgpu_test::ComparisonType::Mean(0.04), // Bounded by Intel 630 on Vk/Windows
-        ],
-    });
-}
-
-#[test]
-#[wasm_bindgen_test::wasm_bindgen_test]
-fn cube_lines() {
-    framework::test::<Example>(framework::FrameworkRefTest {
-        // Generated on 1080ti on Vk/Windows
-        image_path: "/examples/cube/screenshot-lines.png",
-        width: 1024,
-        height: 768,
-        optional_features: wgpu::Features::POLYGON_MODE_LINE,
-        base_test_parameters: wgpu_test::TestParameters::default(),
-        // We're looking for tiny changes here, so we focus on a spike in the 95th percentile.
-        comparisons: &[
-            wgpu_test::ComparisonType::Mean(0.05), // Bounded by Intel 630 on Vk/Windows
-            wgpu_test::ComparisonType::Percentile {
-                percentile: 0.95,
-                threshold: 0.36,
-            }, // Bounded by 1080ti on DX12
-        ],
-    });
 }

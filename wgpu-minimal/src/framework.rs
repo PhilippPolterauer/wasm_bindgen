@@ -3,6 +3,7 @@ use std::future::Future;
 use std::str::FromStr;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+use wasm_bindgen_test::console_log;
 #[cfg(target_arch = "wasm32")]
 use web_sys::{ImageBitmapRenderingContext, OffscreenCanvas};
 use winit::{
@@ -386,7 +387,7 @@ fn start<E: Example>(
                 example.render(&view, &device, &queue, &spawner);
 
                 frame.present();
-
+                
                 #[cfg(target_arch = "wasm32")]
                 {
                     if let Some(offscreen_canvas_setup) = &offscreen_canvas_setup {
@@ -397,7 +398,7 @@ fn start<E: Example>(
                         offscreen_canvas_setup
                             .bitmap_renderer
                             .transfer_from_image_bitmap(&image_bitmap);
-
+                        console_log!("test");
                         log::info!("Transferring OffscreenCanvas to ImageBitmapRenderer");
                     }
                 }
